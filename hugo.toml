@@ -2,3 +2,8 @@ baseURL = 'https://example.org/'
 languageCode = 'fr-fr'
 title = 'My Sandbox site'
 theme = 'hugo-theme-relearn'
+
+[menu]
+ [[menu.shortcuts]]
+    name = "<i class='fas fa-fw fa-search'></i> Recherche builtin"
+    url = "/search/index.html"
