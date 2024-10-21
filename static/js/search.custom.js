@@ -135,16 +135,29 @@ function initLunrJs() {
 function search(term) {
     // Find the item in our index corresponding to the Lunr one to have more info
     // Remove Lunr special search characters: https://lunrjs.com/guides/searching.html
-    term = term.replace( /[*:^~+-]/g, ' ' );
-    var searchTerm = lunr.tokenizer( term ).reduce( function(a,token){return a.concat(searchPatterns(token.str))}, []).join(' ');
+    //term = term.replace( /[*:^~+-]/g, ' ' );
+    term = term.replace( /[:^~+]/g, ' ' );
+    var searchTokens = lunr.tokenizer(term);
+    console.log('tokens # :', searchTokens.length);
+    var searchTerm = '';
+    if (searchTokens.length > 1 && term.indexOf('-') == -1) {
+        // Exact search when term contains several words but not a French compound word (separator: -).
+        console.log(searchTokens)
+        searchTerm = searchTokens.map(token => '+' + token.str).join(' ').trim();
+    } else {
+        searchTerm = searchTokens.reduce( function(a,token){return a.concat(searchPatterns(token.str))}, []).join(' ');
+    }
+
+    console.log('search term: "', searchTerm, '"')
+
     return !searchTerm || !lunrIndex ? [] : lunrIndex.search(searchTerm).map(function(result) {
         return { index: result.ref, matches: Object.keys(result.matchData.metadata) }
     });
 }
 
 function searchPatterns(word) {
-    // for short words high amounts of typos doesn't make sense
-    // for long words we allow less typos because this largly increases search time
+    // for short words high amount of typos doesn't make sense
+    // for long words we allow less typos because this largely increases search time
     var typos = [
         { len:  -1, typos: 1 },
         { len:  60, typos: 2 },
