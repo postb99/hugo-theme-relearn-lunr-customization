@@ -45,7 +45,7 @@ function initLunrIndex( index ){
 }
 
 function triggerSearch(){
-    console.log('triggerSearch from search.custom.js' )
+    //console.log('triggerSearch from search.custom.js' )
     var input = document.querySelector('#R-search-by-detail');
     if( !input ){
         return;
@@ -136,16 +136,15 @@ function search(term) {
     // Find the item in our index corresponding to the Lunr one to have more info
     // Remove Lunr special search characters: https://lunrjs.com/guides/searching.html
     //term = term.replace( /[*:^~+-]/g, ' ' );
-    term = term.replace( /[:^~+]/g, ' ' );
-    var searchTokens = lunr.tokenizer(term);
-    console.log('tokens # :', searchTokens.length);
+    term = term.replace( /[:^~+]/g, ' ' ); // Keep hyphen and wilcard signs.
+    var useExactSearchAndSearchTokens = useExactSearch(term);
+    console.log('tokens # :', useExactSearchAndSearchTokens.searchTokens.length);
     var searchTerm = '';
-    if (searchTokens.length > 1 && term.indexOf('-') == -1) {
-        // Exact search when term contains several words but not a French compound word (separator: -).
-        console.log(searchTokens)
-        searchTerm = searchTokens.map(token => '+' + token.str).join(' ').trim();
+    if (useExactSearchAndSearchTokens.exactSearch) {
+        // Exact search
+        searchTerm = useExactSearchAndSearchTokens.searchTokens.map(token => '+' + token.str).join(' ');
     } else {
-        searchTerm = searchTokens.reduce( function(a,token){return a.concat(searchPatterns(token.str))}, []).join(' ');
+        searchTerm = useExactSearchAndSearchTokens.searchTokens.reduce( function(a,token){return a.concat(searchPatterns(token.str))}, []).join(' ');
     }
 
     console.log('search term: "', searchTerm, '"')
@@ -153,6 +152,51 @@ function search(term) {
     return !searchTerm || !lunrIndex ? [] : lunrIndex.search(searchTerm).map(function(result) {
         return { index: result.ref, matches: Object.keys(result.matchData.metadata) }
     });
+}
+
+/**
+ * This is Barbara Post's contribution that better suits my search needs.
+ * @param {String} searchTerm
+ * @return {Object} object with "exactSearch" boolean ans "searchTokens" lunr tokens.
+ */
+function useExactSearch(searchTerm) {
+    var searchTokens = lunr.tokenizer(searchTerm)
+    
+    if (searchTerm.indexOf('œ') > -1) {
+        // Digraph handling
+        var interestingSearchTokens = searchTokens.filter(t => t.str.indexOf('œ') > -1);
+        interestingSearchTokens.forEach(t => searchTerm += ' ' + t.str.replace('œ', 'oe'));
+
+        console.log('Enhanced search term: ', searchTerm);
+
+        searchTokens = lunr.tokenizer(searchTerm)
+        return { exactSearch: false, searchTokens: searchTokens }
+    }
+
+    if (searchTerm.indexOf('oe') > -1) {
+        // Digraph handling
+        interestingSearchTokens = searchTokens.filter(t => t.str.indexOf('oe') > -1);
+        interestingSearchTokens.forEach(t => searchTerm += ' ' + t.str.replace('oe', 'œ'));
+
+        console.log('Enhanced search term: ', searchTerm);
+
+        searchTokens = lunr.tokenizer(searchTerm)
+        return { exactSearch: false, searchTokens: searchTokens }
+    }
+    
+    if (searchTerm.indexOf('-') > -1) {
+        // French compound word such as "arc-en-ciel". Since Lunr will tokenize this into three tokens, exact search won't work.
+        // But we need to remove accidental hyphens.
+        searchTerm = searchTerm.replace('-', ' ');
+        return { exactSearch: false, searchTokens: searchTokens }
+    }
+
+    if (searchTerm.indexOf('*') > -1) {
+        // Explicit wildcard search by user overrides Lunr stemming and scoring/fuzzy search defined in searchPatterns() function below.
+        return { exactSearch: true, searchTokens: searchTokens }
+    }
+    
+    return { exactSearch: searchTokens.length > 1, searchTokens: searchTokens }
 }
 
 function searchPatterns(word) {
